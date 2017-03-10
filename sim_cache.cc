@@ -152,6 +152,7 @@ private:
 public:
   // Constructor
   ulong RPSeqNo;
+  ulong* Set;
   Cache(ulong size, ulong assoc, ulong blockSize) {
     if(assoc < 1) {
       cout << "Associativity is wrong. Please check the configuration again!!" << endl;
@@ -163,12 +164,12 @@ public:
     this->blockSize = blockSize;
     this->numberOfSets = size/(blockSize * assoc); 
     this->blockOffset = (ulong) log2(blockSize);
-    reads = writes = readMisses = writeMisses = 0;
-
+    reads = writes = readMisses = writeMisses = writeBacks = 0; 
     /* Creating a Cache here */
-    
+    Set = new ulong[numberOfSets];
     this->CacheBlock = new class CacheBlock**[numberOfSets];
     for (int i=0; i < (int) numberOfSets; ++i){
+      Set[i] = 0;
       CacheBlock[i] = new class CacheBlock*[assoc];
       for (int j=0; j < (int) assoc; ++j) {
 	CacheBlock[i][j] = new class CacheBlock(assoc);
@@ -177,12 +178,25 @@ public:
     this->lowerCache = NULL;
   }
 
+  // L2 cache initialization
+
+  void initL2(Cache* cache) {
+    this->lowerCache = cache;
+  }
+
   // Fill Blocks
 
   class CacheBlock* fillCacheBlock(ulong address){
     int index = getIndex(address);
     class CacheBlock* blockToBeFilled = getBlockToBeFilled(address);
     setEvictedAddress(blockToBeFilled->getTag());
+    if (blockToBeFilled != NULL && blockToBeFilled->isDirty()) {
+      setWriteBack();
+      incWriteBacks();
+    }
+    if (blockToBeFilled->isValid()){
+      Set[index] = blockToBeFilled->getSeq();
+    }
 
     blockToBeFilled->setTag(getTag(address));
     blockToBeFilled->setState("VALID");
@@ -214,45 +228,61 @@ public:
     //check if there are invalid blocks in the set
     for (int i=0; i < (int) assoc; ++i){
       if(!CacheBlock[index][i]->isValid())
-	return CacheBlock[index][i];
-    }
+	  return CacheBlock[index][i];
+      }
 
-    if (blockToBeFilled == NULL) {
-      evicted = true;
-      blockToBeFilled = CacheBlock[index][0];
-      for (int i=1; i < (int) assoc; ++i){
-	if(CacheBlock[index][i]->getSeq() < blockToBeFilled->getSeq()){
-	  blockToBeFilled = CacheBlock[index][i];
+      if (blockToBeFilled == NULL) {
+	evicted = true;
+	blockToBeFilled = CacheBlock[index][0];
+	for (int i=1; i < (int) assoc; ++i){
+	  if(CacheBlock[index][i]->getSeq() < blockToBeFilled->getSeq()){
+	    blockToBeFilled = CacheBlock[index][i];
+	  }
 	}
       }
+      return blockToBeFilled;
     }
-    return blockToBeFilled;
-  }
 
-  ulong getIndex(ulong address) const {
-    ulong index, tagslack;
-    tagslack = (ulong) (numberOfSets - 1);
-    index = getTag(address) & tagslack;
-    assert(index < numberOfSets);
-    return index;
-  }
-
-  ulong getTag(ulong address) const{
-    return (address >> (blockOffset));
-  }
-
-
-  class CacheBlock* findCacheBlock(ulong address){
-    ulong tag = getTag(address);
-    class CacheBlock** CacheBlock = this->CacheBlock[getIndex(address)];
-    for(int i=0; i < (int) assoc; ++i) {
-      if((tag == CacheBlock[i]->getTag()) && CacheBlock[i]->isValid())
-	return CacheBlock[i]; 
+    ulong getIndex(ulong address) const {
+      ulong index, tagslack;
+      tagslack = (ulong) (numberOfSets - 1);
+      index = getTag(address) & tagslack;
+      assert(index < numberOfSets);
+      return index;
     }
-    return NULL;
+
+    ulong getTag(ulong address) const{
+      return (address >> (blockOffset));
+    }
+
+
+    class CacheBlock* findCacheBlock(ulong address){
+      ulong tag = getTag(address);
+      class CacheBlock** CacheBlock = this->CacheBlock[getIndex(address)];
+      for(int i=0; i < (int) assoc; ++i) {
+	if((tag == CacheBlock[i]->getTag()) && CacheBlock[i]->isValid())
+	  return CacheBlock[i]; 
+      }
+      return NULL;
+    }
+
+
+  bool isWriteBack() {
+    return writeBack;
   }
 
+  bool isEvicted() {
+    return evicted;
+  }
 
+  void setWriteBack() {
+    writeBack = true; 
+  }
+
+  void incWriteBacks(){
+    writeBacks++;
+  }
+  
   void addReadMiss(){
     readMisses++;
     missType = "READMISS";
@@ -263,18 +293,32 @@ public:
     missType = "WRITEMISS";
   }
 
-  void getBlockAccess(ulong address, char method, bool ){
+  bool isMiss(){
+    if(missType == "READMISS" || missType == "WRITEMISS")
+      return true;
+      else
+	return false;
+    }
+
+  bool isHit(){
+    if(missType == "HIT")
+      return true;
+    else
+      return false;
+  }
+
+  
+  void getBlockAccess(ulong address, char method, bool isL2Exclusive ){
     missType = "UNKNOWN";
     evicted = writeBack = false;
-
-    if(method == 'r') reads++;
-    else writes++;
-    
     class CacheBlock* CacheBlock = findCacheBlock(address);
+    if(method == 'r') reads++;
+    else writes++; 
+      
     if(CacheBlock == NULL) {
       if (method == 'r') addReadMiss();
       else addWriteMiss();
-      if()
+      if(isL2Exclusive)
 	CacheBlock = fillCacheBlock(address);
     }
     else{
@@ -283,7 +327,24 @@ public:
 	processLRU(CacheBlock);
       }
     }
+    if (method == 'w')
+      CacheBlock->setState("DIRTY");
     
+  }
+
+  void invalidateBlock(ulong address){
+    class CacheBlock* cacheBlock = findCacheBlock(address);
+    if(cacheBlock) {
+      if(INCLUSION_TYPE == "INCLUSION" && lowerCache){
+	if (cacheBlock->isDirty()){
+	  setWriteBack();
+	  incWriteBacks();
+	  lowerCache->setWriteBack();
+	  lowerCache->incWriteBacks();
+	}
+      }
+      cacheBlock->setState("INVALID");
+    } 
   }
 
   void displayOutput(){
@@ -292,12 +353,17 @@ public:
     cout << "b. Number of L1 read misses: \t\t" << readMisses << endl;
     cout << "c. Number of L1 writes: \t\t" << writes << endl;
     cout << "d. Number of L1 write misses: \t\t" << writeMisses << endl;
-    
-  }
-};
+    if(ISL2){
+      cout << "g. Number of L2 reads: \t\t\t" << lowerCache->reads << endl;
+	cout << "h. Number of L2 read misses: \t\t" << lowerCache->readMisses << endl;
+	cout << "i. Number of L2 writes: \t\t" << lowerCache->writes << endl;
+	cout << "j. Number of L2 write misses: \t\t" << lowerCache->writeMisses << endl;
+      }
+    }
+  };
 
 
-// Main Starts Here
+  // Main Starts Here
 
 int main(int argc, char *argv[]){
 
@@ -325,8 +391,12 @@ int main(int argc, char *argv[]){
   if(isConfigSuccessful) printCacheConfig(&blockSize,&l1Size,&l1Assoc,&l2Size,&l2Assoc,fname);
 
   Cache* L1 = new Cache(l1Size, l1Assoc, blockSize);
-  if(ISL2) Cache* L2 = new Cache(l2Size,l2Assoc,blockSize);
-
+  Cache* L2;
+  
+  if(ISL2){
+    L2 = new Cache(l2Size,l2Assoc,blockSize);
+    L1->initL2(L2);
+  }
   char instruction[20];
   int address_accessed = 0;
 
@@ -340,18 +410,43 @@ int main(int argc, char *argv[]){
     token = strtok(NULL," ");
     address = strtol(token,NULL,16);
 
-    L1->getBlockAccess(address,method[0]);
+    L1->getBlockAccess(address,method[0],true);
     if(ISL2){
-      switch(INCLUSION_TYPE) {
-      case "NON-INCLUSIVE":
-	
-
-
+      // Non inclusive
+      if(INCLUSION_TYPE == "NON-INCLUSIVE") {
+	if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w', true); 
+	if(L1->isMiss())  L2->getBlockAccess(address, 'r', true);
+      }
+      else if(INCLUSION_TYPE == "INCLUSIVE") {
+	if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w', true); 
+	if (L2->isEvicted())  L1->invalidateBlock(L2->getEvictedAddress()); 
+	if(L1->isMiss()) {
+	  L2->getBlockAccess(address, 'r', true);
+	  if (L2->isEvicted())  L1->invalidateBlock(L2->getEvictedAddress());
+	}
+      }
+      else if(INCLUSION_TYPE == "EXCLUSIVE") {
+	if(L1->isHit()) L2->invalidateBlock(address);
+	if(L1->isEvicted()) {
+	  L2->getBlockAccess(L1->getEvictedAddress(),'w',true);
+	    if(!L1->isWriteBack()) L2->findCacheBlock(L1->getEvictedAddress())->setState("VALID"); 
+	}
+	 if(L1->isMiss()){
+	   L2->getBlockAccess(address,'r',false);
+	   if(L2->isHit()){
+	     if(L2->findCacheBlock(address)->isDirty())
+	       L1->findCacheBlock(address)->setState("DIRTY");
+	     L2->invalidateBlock(address);
+	   }
+	 }
 	
       }
-
-    }
+      else{
+	cout << "Associativity Mismatch!!!" << endl;
+      }
+    } 
   }
+
   L1->displayOutput();
   return 1;
 }
