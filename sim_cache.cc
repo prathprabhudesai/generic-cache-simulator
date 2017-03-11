@@ -28,8 +28,8 @@ void printCacheConfig(ulong blockSize, ulong l1Size, ulong l1Assoc, ulong l2Size
 // Read Command Inputs
 
 bool readCmdInput(int argc, char *argv[],ulong *blockSize,ulong *l1Size,ulong *l1Assoc, ulong *l2Size, ulong *l2Assoc, FILE ** traceFile){
-  char * fname;  
-  if(argc < 8) {
+  char * fname; 
+  if(argc <= 8) {
     cout << "Not enough input parameters are provided" << endl;
     cout << "Valid Input: .\\sim_cache <BLOCKSIZE> <L1_SIZE> <L1_ASSOC> <L2_SIZE> <L2_ASSOC> <REPL_POLICY> <INCLUSION> <TRACE_FILE> " << endl;
     return false;
@@ -96,15 +96,18 @@ void displayOutput(Cache * L1){
   }
 }
 
-// Non-Inlcusive Cache
+// Access L1
+void accessL1(Cache * L1, char instr, ulong address) {
+  L1->getBlockAccess(address,instr,true); 
+}
 
+// Non-Inlcusive Cache
 void nonInclusiveCache(Cache * L1, Cache * L2, ulong address) {
   if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w', true); 
   if(L1->isMiss())  L2->getBlockAccess(address, 'r', true); 
 }
 
 // Inclusive Cache
-
 void inclusiveCache(Cache * L1, Cache * L2, ulong address) {
   if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w', true); 
   if (L2->isEvicted())  L1->invalidateBlock(L2->getEvictedAddress()); 
@@ -115,7 +118,6 @@ void inclusiveCache(Cache * L1, Cache * L2, ulong address) {
 }
 
 // Exclusive Cache
-
 void exclusiveCache(Cache * L1, Cache * L2, ulong address) {
   if(L1->isHit()) L2->invalidateBlock(address);
   if(L1->isEvicted()) {
@@ -126,55 +128,53 @@ void exclusiveCache(Cache * L1, Cache * L2, ulong address) {
     L2->getBlockAccess(address,'r',false);
     if(L2->isHit()){
       if(L2->findCacheBlock(address)->isDirty())  L1->findCacheBlock(address)->setState("DIRTY");
-	L2->invalidateBlock(address);
-      }
-    } 
-  }
-
-  // Main Starts Here
-
-  int main(int argc, char *argv[]){
-
-    bool isCmdValid, isConfigSuccessful; 
-    ulong blockSize, l1Size, l1Assoc, l2Size, l2Assoc, address;
-    char *token, *method;
-    FILE *traceFile;
-    char instruction[20];
-  
-    isCmdValid = readCmdInput(argc,argv,&blockSize,&l1Size,&l1Assoc,&l2Size,&l2Assoc,&traceFile);
-
-    if(!isCmdValid)  return 0;
-  
-    // initialize caches
-  
-    Cache* L1 = new Cache(l1Size, l1Assoc, blockSize);
-    Cache* L2;
-
-    if(ISL2){
-      L2 = new Cache(l2Size,l2Assoc,blockSize);
-      L1->initL2(L2);
+      L2->invalidateBlock(address);
     }
+  } 
+}
 
-    // Read the trace file and simulate cache config
+// Main Starts Here
 
-    while(fgets(instruction,20,traceFile) != NULL){
-      token = strtok(instruction, " "); 
-      method = token;
-      token = strtok(NULL," ");
-      address = strtol(token,NULL,16);
+int main(int argc, char *argv[]){
 
-      L1->getBlockAccess(address,method[0],true);
+  bool isCmdValid, isConfigSuccessful; 
+  ulong blockSize, l1Size, l1Assoc, l2Size, l2Assoc, address;
+  char *token, *method;
+  FILE *traceFile;
+  char instruction[20];
+  
+  isCmdValid = readCmdInput(argc,argv,&blockSize,&l1Size,&l1Assoc,&l2Size,&l2Assoc,&traceFile);
 
-      if(ISL2) {
-      
-	if(INCLUSION_TYPE == "NON-INCLUSIVE") nonInclusiveCache(L1, L2, address);
+  if(!isCmdValid)  return 0;
+  
+  // initialize caches
+  
+  Cache* L1 = new Cache(l1Size, l1Assoc, blockSize);
+  Cache* L2;
 
-	else if(INCLUSION_TYPE == "INCLUSIVE") inclusiveCache(L1, L2, address);
-	
-	else exclusiveCache(L1, L2, address);
-      }
-    } 
-
-    displayOutput(L1);
-    return 1;
+  if(ISL2){
+    L2 = new Cache(l2Size,l2Assoc,blockSize);
+    L1->initL2(L2);
   }
+
+  // Read the trace file and simulate cache config
+
+  while(fgets(instruction,20,traceFile) != NULL) {
+    token = strtok(instruction, " "); 
+    method = token;
+    token = strtok(NULL," ");
+    address = strtol(token,NULL,16);
+
+    accessL1(L1, method[0], address);
+
+    if(ISL2)
+      switch(atoi(argv[7])){
+      case 0: nonInclusiveCache(L1, L2, address); break;
+      case 1: inclusiveCache(L1, L2, address); break;
+      case 2: exclusiveCache(L1, L2, address); break; 
+      }
+  }
+  
+  displayOutput(L1);
+  return 1;
+}
