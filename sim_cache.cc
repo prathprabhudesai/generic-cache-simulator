@@ -137,15 +137,15 @@ void exclusiveCache(Cache * L1, Cache * L2, ulong address) {
 
 int main(int argc, char *argv[]){
 
-  bool isCmdValid, isConfigSuccessful; 
+  bool isConfigSuccessful; 
   ulong blockSize, l1Size, l1Assoc, l2Size, l2Assoc, address;
   char *token, *method;
   FILE *traceFile;
   char instruction[20];
   
-  isCmdValid = readCmdInput(argc,argv,&blockSize,&l1Size,&l1Assoc,&l2Size,&l2Assoc,&traceFile);
+  isConfigSuccessful = readCmdInput(argc,argv,&blockSize,&l1Size,&l1Assoc,&l2Size,&l2Assoc,&traceFile);
 
-  if(!isCmdValid)  return 0;
+  if(!isConfigSuccessful)  return 0;
   
   // initialize caches
   
