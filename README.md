@@ -2,13 +2,11 @@
 
 This is a generic cache simulator written in c++. It supports two level of heirarchy i.e. L1 and L2 cache. Provides non-inlusive, inclusive, exclusive implementation with First In First Out and Least Recently Used replacement policies.
 
-## To build this project
+## Build the Simulator
 
-1. Clone the repository.
-
-<code> git clone "" </code>
-
-2. Go to the directory and make all.
-
+<code> git clone https://github.com/prathprabhudesai/Generic_Cache_Simulator.git </code>
 <code> cd Generic_Cache_Simulator; make all </code>
 
+## Run the Simulator
+
+<code> ./sim_cache <BLOCKSIZE> <L1_SIZE> <L1_ASSOC> <L2_SIZE> <L2_ASSOC> <REPL_POLICY> <INCLUSION> <TRACE_FILE> </code>
