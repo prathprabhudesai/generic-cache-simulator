@@ -98,34 +98,40 @@ void displayOutput(Cache * L1){
 
 // Access L1
 void accessL1(Cache * L1, char instr, ulong address) {
-  L1->getBlockAccess(address,instr,true); 
+  EXCLUSIVITY = true;
+  L1->getBlockAccess(address,instr); 
 }
 
 // Non-Inlcusive Cache
 void nonInclusiveCache(Cache * L1, Cache * L2, ulong address) {
-  if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w', true); 
-  if(L1->isMiss())  L2->getBlockAccess(address, 'r', true); 
+  EXCLUSIVITY = true;
+  if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w'); 
+  if(L1->isMiss())  L2->getBlockAccess(address, 'r'); 
 }
 
 // Inclusive Cache
 void inclusiveCache(Cache * L1, Cache * L2, ulong address) {
-  if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w', true); 
+  EXCLUSIVITY = true;
+  if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w'); 
   if (L2->isEvicted())  L1->invalidateBlock(L2->getEvictedAddress()); 
   if(L1->isMiss()) {
-    L2->getBlockAccess(address, 'r', true);
+    L2->getBlockAccess(address, 'r');
     if (L2->isEvicted())  L1->invalidateBlock(L2->getEvictedAddress());
   }
 }
 
 // Exclusive Cache
 void exclusiveCache(Cache * L1, Cache * L2, ulong address) {
+  EXCLUSIVITY = true;
   if(L1->isHit()) L2->invalidateBlock(address);
   if(L1->isEvicted()) {
-    L2->getBlockAccess(L1->getEvictedAddress(),'w',true);
+    L2->getBlockAccess(L1->getEvictedAddress(),'w');
     if(!L1->isWriteBack()) L2->findCacheBlock(L1->getEvictedAddress())->setState("VALID"); 
   }
   if(L1->isMiss()) {
-    L2->getBlockAccess(address,'r',false);
+    EXCLUSIVITY = false;
+    L2->getBlockAccess(address,'r');
+    EXCLUSIVITY = true;
     if(L2->isHit()){
       if(L2->findCacheBlock(address)->isDirty())  L1->findCacheBlock(address)->setState("DIRTY");
       L2->invalidateBlock(address);

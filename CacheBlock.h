@@ -17,25 +17,25 @@ class CacheBlock {
     this->state = "INVALID";
   }
 
-  bool isValid() { return (state != "INVALID"); }
+  bool isValid() { return (this->state != "INVALID"); }
 
-  bool isDirty() { return (state == "DIRTY"); }
+  bool isDirty() { return (this->state == "DIRTY"); }
 
-  void incSeq() { ++seq; }
+  void incSeq() { ++this->seq; }
 
-  ulong getIndex() { return index; }
+  ulong getIndex() { return this->index; }
 
   void setIndex(ulong index) { this->index = index; }
 
-  ulong getSeq() { return seq; }
+  ulong getSeq() { return this->seq; }
 
   void setSeq(ulong seq) { this->seq = seq; }
 
-  string getState() { return state; }
+  string getState() { return this->state; }
 
   void setState(string state) { this->state = state; }
 
-  ulong getTag() { return tag; }
+  ulong getTag() { return this->tag; }
 
   void setTag(ulong tag) { this->tag = tag; }
   

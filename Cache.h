@@ -4,6 +4,7 @@ using namespace std;
 string  REPLACEMENT_POLICY;
 string  INCLUSION_TYPE;
 bool ISL2;
+bool EXCLUSIVITY;
 
 class Cache {
  private:
@@ -18,26 +19,21 @@ class Cache {
   ulong* Set;
 
   Cache(ulong size, ulong assoc, ulong blockSize) {
-    if(assoc < 1) {
-      cout << "Associativity is wrong. Please check the configuration again!!" << endl;
-      exit(1); 
-    }
+    reads = writes = readMisses = writeMisses = writeBacks = 0;
     this->RPSeqNo = 0;
     this->size = size;
     this->assoc = assoc;
     this->blockSize = blockSize;
     this->numberOfSets = size/(blockSize * assoc); 
     this->blockOffset = (ulong) log2(blockSize);
-    reads = writes = readMisses = writeMisses = writeBacks = 0; 
- 
     Set = new ulong[numberOfSets];
     this->CacheBlock = new class CacheBlock**[numberOfSets];
     for (int i=0; i < (int) numberOfSets; ++i){
-      Set[i] = 0;
       CacheBlock[i] = new class CacheBlock*[assoc];
       for (int j=0; j < (int) assoc; ++j) {
 	CacheBlock[i][j] = new class CacheBlock(assoc);
-      } 
+      }
+      Set[i] = 0;
     } 
     this->lowerCache = NULL;
   }
@@ -48,48 +44,49 @@ class Cache {
 
   // Getters and setters for Private variables
 
-  ulong getEvictedAddress() { return evictedAddress; }
+  ulong getEvictedAddress() { return this->evictedAddress; }
 
-  void setEvictedAddress(ulong tag) { if(evicted) evictedAddress = getAddress(tag); }
+  void setEvictedAddress(ulong tag) { if(this->evicted) this->evictedAddress = getAddress(tag); }
 
-  void setWriteBack() { writeBack = true; }
+  void setWriteBack(bool cond) { this->writeBack = cond; }
 
-  void incWriteBacks(){ writeBacks++; }
+  void setEvicted(bool cond) { this->evicted = cond; }
 
-  void incReads() { reads++; }
+  void incWriteBacks(){ this->writeBacks++; }
 
-  void incWrites() { writes++; }
+  void incReads() { this->reads++; }
+
+  void incWrites() { this->writes++; }
   
-  void addReadMiss() { readMisses++;  missType = "READMISS"; }
+  void addReadMiss() { this->readMisses++;  this->missType = "READMISS"; }
 
-  void addWriteMiss() { writeMisses++;  missType = "WRITEMISS"; }
+  void addWriteMiss() { this->writeMisses++;  this->missType = "WRITEMISS"; }
 
-  ulong getMemoryTraffic() { return(readMisses + writeMisses + writeBacks); }
+  ulong getMemoryTraffic() { return(this->readMisses + this->writeMisses + this->writeBacks); }
 
-  float getMissRate() { return(((float)(readMisses + writeMisses))/((float)(reads + writes))); } 
+  float getMissRate() { return(((float)(this->readMisses + this->writeMisses))/((float)(this->reads + this->writes))); } 
 
-  ulong getReads() { return reads; }
+  ulong getReads() { return this->reads; }
 
-  ulong getWrites() { return writes; }
+  ulong getWrites() { return this->writes; }
 
-  ulong getReadMisses() { return readMisses; }
+  ulong getReadMisses() { return this->readMisses; }
 
-  ulong getWriteMisses() { return writeMisses; }
+  ulong getWriteMisses() { return this->writeMisses; }
 
-  ulong getWriteBacks() { return writeBacks; } 
+  ulong getWriteBacks() { return this->writeBacks; } 
 
-  Cache * getLowerCache() { return lowerCache; }
+  Cache * getLowerCache() { return this->lowerCache; }
 
-  
   // checking bool conditions
   
-  bool isWriteBack() { return writeBack; }
+  bool isWriteBack() { return this->writeBack; }
 
-  bool isEvicted() { return evicted; }
+  bool isEvicted() { return this->evicted; }
 
-  bool isMiss() { return (missType == "READMISS" || missType == "WRITEMISS"); }
+  bool isMiss() { return (this->missType == "READMISS" || this->missType == "WRITEMISS"); }
 
-  bool isHit() { return (missType == "HIT"); }
+  bool isHit() { return (this->missType == "HIT"); }
 
   // Bit manipulations and calculations
 
@@ -101,15 +98,17 @@ class Cache {
   
   // Try to access the block
   
-  void getBlockAccess(ulong address, char method, bool isL2Exclusive ){
+  void getBlockAccess(ulong address, char method){
     missType = "UNKNOWN";
-    evicted = writeBack = false;
+    setWriteBack(false);
+    setEvicted(false);
+    
     class CacheBlock* CacheBlock = findCacheBlock(address);
     if(method == 'r') incReads();  else incWrites(); 
       
     if(CacheBlock == NULL) {
       if (method == 'r') addReadMiss();  else addWriteMiss();
-      if(isL2Exclusive)  CacheBlock = fillCacheBlock(address);
+      if(EXCLUSIVITY)  CacheBlock = fillCacheBlock(address);
     }
     else {
       missType = "HIT";
@@ -142,7 +141,7 @@ class Cache {
     }
 
     if (blockToBeFilled == NULL) {
-      evicted = true;
+      setEvicted(true);
       blockToBeFilled = CacheBlock[index][0];
       for (int i=1; i < (int) assoc; ++i){
 	if(CacheBlock[index][i]->getSeq() < blockToBeFilled->getSeq()){
@@ -161,7 +160,7 @@ class Cache {
     setEvictedAddress(blockToBeFilled->getTag());
 
     if (blockToBeFilled != NULL && blockToBeFilled->isDirty()) {
-      setWriteBack();
+      setWriteBack(true);
       incWriteBacks();
     }
     if (blockToBeFilled->isValid()){ Set[index] = blockToBeFilled->getSeq(); }
@@ -184,9 +183,9 @@ class Cache {
     if(cacheBlock) {
       if(INCLUSION_TYPE == "INCLUSION" && lowerCache){
 	if (cacheBlock->isDirty()){
-	  setWriteBack();
+	  setWriteBack(true);
 	  incWriteBacks();
-	  lowerCache->setWriteBack();
+	  lowerCache->setWriteBack(true);
 	  lowerCache->incWriteBacks();
 	}
       }
