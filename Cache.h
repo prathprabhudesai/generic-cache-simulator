@@ -8,7 +8,7 @@ bool EXCLUSIVITY;
 
 class Cache {
  private:
-  ulong size, assoc, blockSize, numberOfSets, blockOffset, reads, writes, readMisses, writeMisses, writeBacks,  evictedAddress;
+  ulong size, assoc, blockSize, numberOfSets, blockOffset, reads, writes, readMisses, writeMisses, writeBacks,  evictedAddress, loopComp;
   string missType;
   bool writeBack, evicted;
   class CacheBlock*** CacheBlock;
@@ -18,8 +18,8 @@ class Cache {
   ulong RPSeqNo; //Replacement Policy
   ulong* Set;
 
-  Cache(ulong size, ulong assoc, ulong blockSize) {
-    reads = writes = readMisses = writeMisses = writeBacks = 0;
+  Cache(ulong blockSize, ulong assoc, ulong size) {
+    reads = writes = readMisses = writeMisses = writeBacks = loopComp = 0;
     this->RPSeqNo = 0;
     this->size = size;
     this->assoc = assoc;
@@ -31,6 +31,7 @@ class Cache {
     for (int i=0; i < (int) numberOfSets; ++i){
       CacheBlock[i] = new class CacheBlock*[assoc];
       for (int j=0; j < (int) assoc; ++j) {
+	loopComp++;
 	CacheBlock[i][j] = new class CacheBlock(assoc);
       }
       Set[i] = 0;
@@ -124,6 +125,7 @@ class Cache {
     ulong tag = getTag(address);
     class CacheBlock** CacheBlock = this->CacheBlock[getIndex(address)];
     for(int i=0; i < (int) assoc; ++i) {
+      loopComp++;
       if((tag == CacheBlock[i]->getTag()) && CacheBlock[i]->isValid())
 	return CacheBlock[i]; 
     }
@@ -132,24 +134,35 @@ class Cache {
 
   // Get The Block
   class CacheBlock* getBlockToBeFilled(ulong address) {
-    class CacheBlock* blockToBeFilled = NULL;
-    ulong index = getIndex(address);
-
-    for (int i=0; i < (int) assoc; ++i) {
-      if(!CacheBlock[index][i]->isValid())
-	return CacheBlock[index][i];
-    }
-
-    if (blockToBeFilled == NULL) {
+    class CacheBlock* blockToBeFilled = getInvalidBlock(getIndex(address));
+    if (!blockToBeFilled) {
       setEvicted(true);
-      blockToBeFilled = CacheBlock[index][0];
-      for (int i=1; i < (int) assoc; ++i){
-	if(CacheBlock[index][i]->getSeq() < blockToBeFilled->getSeq()){
-	  blockToBeFilled = CacheBlock[index][i];
-	}
-      }
+      blockToBeFilled = getRepPolBlock(getIndex(address)); 
     } 
     return blockToBeFilled;
+  }
+
+
+  // Check the invalid/empty block
+  class CacheBlock* getInvalidBlock(ulong index){
+    for (int i=0; i < (int) assoc; ++i) {
+      loopComp++;
+      if(!CacheBlock[index][i]->isValid())
+	return CacheBlock[index][i]; 
+    }
+    return NULL;
+  }
+
+
+  class CacheBlock* getRepPolBlock(ulong index){
+    class CacheBlock* block = CacheBlock[index][0];
+    for (int i=1; i < (int) assoc; ++i){
+      loopComp++;
+      if(CacheBlock[index][i]->getSeq() < block->getSeq()){
+	block = CacheBlock[index][i];
+      }
+    }
+    return block;
   }
 
   // Fill The Block

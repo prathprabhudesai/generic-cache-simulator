@@ -19,7 +19,7 @@ void printCacheConfig(ulong blockSize, ulong l1Size, ulong l1Assoc, ulong l2Size
   cout << "L1_SIZE: \t\t" << l1Size << endl;
   cout << "L1_ASSOC: \t\t" << l1Assoc << endl;
   cout << "L2_SIZE: \t\t" << l2Size << endl;
-  cout << "L1_ASSOC: \t\t" << l2Assoc << endl;
+  cout << "L2_ASSOC: \t\t" << l2Assoc << endl;
   cout << "REPLACEMENT POLICY: \t" << REPLACEMENT_POLICY << endl;
   cout << "INCLUSION PROPERTY: \t" << INCLUSION_TYPE << endl;
   cout << "trace_file: \t\t" << fname;
@@ -155,11 +155,11 @@ int main(int argc, char *argv[]){
   
   // initialize caches
   
-  Cache* L1 = new Cache(l1Size, l1Assoc, blockSize);
+  Cache* L1 = new Cache(blockSize, l1Assoc, l1Size );
   Cache* L2;
 
   if(ISL2){
-    L2 = new Cache(l2Size,l2Assoc,blockSize);
+    L2 = new Cache(blockSize, l2Assoc, l2Size);
     L1->initL2(L2);
   }
 
