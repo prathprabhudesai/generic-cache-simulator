@@ -1,0 +1,23 @@
+===== Simulator Configuration =====
+BLOCKSIZE: 		64
+L1_SIZE: 		32768
+L1_ASSOC: 		2
+L2_SIZE: 		262144
+L2_ASSOC: 		4
+REPLACEMENT POLICY: 	LRU
+INCLUSION PROPERTY: 	INCLUSIVE
+trace_file: 		GCC.t
+===== Simulation Results (raw) =====
+a. number of L1 reads: 		1251647
+b. number of L1 read misses: 	22783
+c. number of L1 writes: 	748353
+d. number of L1 write misses: 	13668
+e. L1 miss rate: 		0.018226
+f. number of L1 writebacks: 	32269
+g. number of L2 reads: 		36451
+h. number of L2 read misses: 	32062
+i. number of L2 writes: 	32269
+j. number of L2 write misses: 	0
+k. L2 miss rate: 		0.466560
+l. number of L2 writebacks: 	25166
+m. total memory traffic: 	57228

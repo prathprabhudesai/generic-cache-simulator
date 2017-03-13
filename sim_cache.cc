@@ -14,7 +14,7 @@ typedef unsigned long ulong;
 //Functions assisting Main 
 
 void printCacheConfig(ulong blockSize, ulong l1Size, ulong l1Assoc, ulong l2Size, ulong l2Assoc,char *fname ){
-  cout << "==== Simulator Configuration ====" << endl;
+  cout << "===== Simulator Configuration =====" << endl;
   cout << "BLOCKSIZE: \t\t" << blockSize << endl;
   cout << "L1_SIZE: \t\t" << l1Size << endl;
   cout << "L1_ASSOC: \t\t" << l1Assoc << endl;
@@ -69,12 +69,12 @@ bool readCmdInput(int argc, char *argv[],ulong *blockSize,ulong *l1Size,ulong *l
 // Output
 
 void displayOutput(Cache * L1){
-  cout << "\n===== Simulation Results =====" << endl;
+  cout << "\n===== Simulation Results (raw) =====" << endl;
   cout << "a. number of L1 reads: \t\t" << L1->getReads() << endl;
   cout << "b. number of L1 read misses: \t" << L1->getReadMisses() << endl;
   cout << "c. number of L1 writes: \t" << L1->getWrites() << endl;
   cout << "d. number of L1 write misses: \t" << L1->getWriteMisses() << endl;
-  cout << "e. L1 miss rate: \t\t" << L1->getMissRate() << endl;
+  printf("e. L1 miss rate: \t\t%.6f\n",L1->getMissRate());
   cout << "f. number of L1 writebacks: \t" << L1->getWriteBacks() << endl; 
   Cache * L2 = L1->getLowerCache();
   if(L2) {
@@ -82,7 +82,7 @@ void displayOutput(Cache * L1){
     cout << "h. number of L2 read misses: \t" << L2->getReadMisses() << endl;
     cout << "i. number of L2 writes: \t" << L2->getWrites() << endl;
     cout << "j. number of L2 write misses: \t" << L2->getWriteMisses() << endl;
-    cout << "k. L2 miss rate: \t\t" << L2->getMissRate() << endl;
+    printf("k. L2 miss rate: \t\t%.6f\n",L2->getMissRate());
     cout << "l. number of L2 writebacks: \t" << L2->getWriteBacks() << endl;
     cout << "m. total memory traffic: \t" << L2->getMemoryTraffic() << endl;
   } else {
@@ -111,9 +111,13 @@ void nonInclusiveCache(Cache * L1, Cache * L2, ulong address) {
 
 // Inclusive Cache
 void inclusiveCache(Cache * L1, Cache * L2, ulong address) {
-  EXCLUSIVITY = true;
-  if (L1->isWriteBack())  L2->getBlockAccess(L1->getEvictedAddress(), 'w'); 
-  if (L2->isEvicted())  L1->invalidateBlock(L2->getEvictedAddress()); 
+  EXCLUSIVITY = true; 
+  if (L1->isWriteBack()) {
+    L2->getBlockAccess(L1->getEvictedAddress(), 'w'); 
+    if (L2->isEvicted()) {
+      L1->invalidateBlock(L2->getEvictedAddress());
+    }
+  }
   if(L1->isMiss()) {
     L2->getBlockAccess(address, 'r');
     if (L2->isEvicted())  L1->invalidateBlock(L2->getEvictedAddress());
@@ -134,53 +138,52 @@ void exclusiveCache(Cache * L1, Cache * L2, ulong address) {
     EXCLUSIVITY = true;
     if(L2->isHit()){
       if(L2->findCacheBlock(address)->isDirty())  L1->findCacheBlock(address)->setState("DIRTY");
-      L2->invalidateBlock(address);
-    }
-  } 
-}
-
-// Main Starts Here
-
-int main(int argc, char *argv[]){
-
-  bool isConfigSuccessful; 
-  ulong blockSize, l1Size, l1Assoc, l2Size, l2Assoc, address;
-  char *token, *method;
-  FILE *traceFile;
-  char instruction[20];
-  
-  isConfigSuccessful = readCmdInput(argc,argv,&blockSize,&l1Size,&l1Assoc,&l2Size,&l2Assoc,&traceFile);
-
-  if(!isConfigSuccessful)  return 0;
-  
-  // initialize caches
-  
-  Cache* L1 = new Cache(blockSize, l1Assoc, l1Size );
-  Cache* L2;
-
-  if(ISL2){
-    L2 = new Cache(blockSize, l2Assoc, l2Size);
-    L1->initL2(L2);
-  }
-
-  // Read the trace file and simulate cache config
-
-  while(fgets(instruction,20,traceFile) != NULL) {
-    token = strtok(instruction, " "); 
-    method = token;
-    token = strtok(NULL," ");
-    address = strtol(token,NULL,16);
-
-    accessL1(L1, method[0], address);
-
-    if(ISL2)
-      switch(atoi(argv[7])){
-      case 0: nonInclusiveCache(L1, L2, address); break;
-      case 1: inclusiveCache(L1, L2, address); break;
-      case 2: exclusiveCache(L1, L2, address); break; 
+	L2->invalidateBlock(address);
       }
+    } 
   }
+
+  // Main Starts Here
+
+  int main(int argc, char *argv[]){
+
+    bool isConfigSuccessful; 
+    ulong blockSize, l1Size, l1Assoc, l2Size, l2Assoc, address;
+    char *token, *method;
+    FILE *traceFile;
+    char instruction[20];
+    Cache * L1, * L2;
   
-  displayOutput(L1);
-  return 1;
-}
+    isConfigSuccessful = readCmdInput(argc,argv,&blockSize,&l1Size,&l1Assoc,&l2Size,&l2Assoc,&traceFile);
+
+    if(!isConfigSuccessful)  return 0;
+  
+    // initialize caches
+  
+    L1 = new Cache(blockSize, l1Assoc, l1Size ); 
+    if(ISL2){
+      L2 = new Cache(blockSize, l2Assoc, l2Size);
+      L1->initL2(L2);
+    } 
+
+    // Read the trace file and simulate cache config
+
+    while(fgets(instruction,20,traceFile) != NULL) {
+      token = strtok(instruction, " "); 
+      method = token;
+      token = strtok(NULL," ");
+      address = strtol(token,NULL,16);
+
+      accessL1(L1, method[0], address);
+
+      if(ISL2)
+	switch(atoi(argv[7])){
+	case 0: nonInclusiveCache(L1, L2, address); break;
+	case 1: inclusiveCache(L1, L2, address); break;
+	case 2: exclusiveCache(L1, L2, address); break; 
+	}
+    }
+  
+    displayOutput(L1);
+    return 1;
+  }

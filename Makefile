@@ -1,6 +1,6 @@
 CC = g++
-#OPT = -O3
-OPT = -g
+OPT = -O3
+#OPT = -g
 WARN = -Wall
 CFLAGS = $(OPT) $(WARN) 
 

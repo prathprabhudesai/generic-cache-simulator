@@ -172,7 +172,7 @@ class Cache {
     class CacheBlock* blockToBeFilled = getBlockToBeFilled(address);
     setEvictedAddress(blockToBeFilled->getTag());
 
-    if (blockToBeFilled != NULL && blockToBeFilled->isDirty()) {
+    if ((blockToBeFilled != NULL) && (blockToBeFilled->isDirty())) {
       setWriteBack(true);
       incWriteBacks();
     }
