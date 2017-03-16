@@ -75,7 +75,7 @@ class Cache {
 
   ulong getWriteMisses() { return this->writeMisses; }
 
-  ulong getWriteBacks() { return this->writeBacks; } 
+  ulong getWriteBacks() const { return this->writeBacks; } 
 
   Cache * getLowerCache() { return this->lowerCache; }
 
@@ -174,7 +174,7 @@ class Cache {
 
     if ((blockToBeFilled != NULL) && (blockToBeFilled->isDirty())) {
       setWriteBack(true);
-      incWriteBacks();
+      this->incWriteBacks();
     }
     if (blockToBeFilled->isValid()){ Set[index] = blockToBeFilled->getSeq(); }
 
@@ -193,11 +193,11 @@ class Cache {
   
   void invalidateBlock(ulong address){
     class CacheBlock* cacheBlock = findCacheBlock(address);
-    if(cacheBlock) {
+    if(cacheBlock != NULL) {
       if(INCLUSION_TYPE == "INCLUSION" && lowerCache){
 	if (cacheBlock->isDirty()){
 	  setWriteBack(true);
-	  incWriteBacks();
+	  this->incWriteBacks();
 	  lowerCache->setWriteBack(true);
 	  lowerCache->incWriteBacks();
 	}
